@@ -1,10 +1,16 @@
 import { GoogleGenAI } from "@google/genai";
 import { MODEL_NAME } from '../constants';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const generateWallpaperImage = async (prompt: string, styleModifier: string): Promise<string> => {
   try {
+    // API 키 확인 및 지연 초기화 (앱 실행 시 크래시 방지)
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error("API Key가 설정되지 않았습니다. 배포 환경 변수를 확인해주세요.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+
     const fullPrompt = `${styleModifier}, ${prompt}. vertical aspect ratio 9:16, mobile phone wallpaper, high quality, 4k resolution, aesthetics, beautiful composition.`;
 
     const response = await ai.models.generateContent({
