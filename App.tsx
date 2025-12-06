@@ -3,6 +3,7 @@ import Header from './components/Header';
 import StyleSelector from './components/StyleSelector';
 import ImageResult from './components/ImageResult';
 import GenerateButton from './components/GenerateButton';
+import ApiKeyModal from './components/ApiKeyModal';
 import { StyleType } from './types';
 import { WALLPAPER_STYLES } from './constants';
 import { generateWallpaperImage } from './services/geminiService';
@@ -13,18 +14,41 @@ const App: React.FC = () => {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // API Key State
+  const [apiKey, setApiKey] = useState<string>('');
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
 
-  // Load style preference from local storage on mount
+  // Initialize checks
   useEffect(() => {
+    // 1. Load style preference
     const savedStyle = localStorage.getItem('preferredStyle');
     if (savedStyle && Object.values(StyleType).includes(savedStyle as StyleType)) {
       setSelectedStyle(savedStyle as StyleType);
+    }
+
+    // 2. Check for API Key
+    const envKey = process.env.API_KEY;
+    const storedKey = localStorage.getItem('gemini_api_key');
+
+    if (envKey) {
+      setApiKey(envKey);
+    } else if (storedKey) {
+      setApiKey(storedKey);
+    } else {
+      setShowApiKeyModal(true);
     }
   }, []);
 
   const handleStyleSelect = (style: StyleType) => {
     setSelectedStyle(style);
     localStorage.setItem('preferredStyle', style);
+  };
+
+  const handleSaveApiKey = (key: string) => {
+    setApiKey(key);
+    localStorage.setItem('gemini_api_key', key);
+    setShowApiKeyModal(false);
   };
 
   const handleGenerate = async () => {
@@ -41,10 +65,17 @@ const App: React.FC = () => {
       const styleConfig = WALLPAPER_STYLES.find(s => s.id === selectedStyle);
       const styleModifier = styleConfig ? styleConfig.promptModifier : '';
       
-      const imageUrl = await generateWallpaperImage(prompt, styleModifier);
+      // Pass the current apiKey to the service
+      const imageUrl = await generateWallpaperImage(prompt, styleModifier, apiKey);
       setGeneratedImage(imageUrl);
     } catch (err: any) {
-      setError(err.message || "이미지 생성 중 오류가 발생했습니다.");
+      const errorMessage = err.message || "이미지 생성 중 오류가 발생했습니다.";
+      setError(errorMessage);
+      
+      // If error suggests auth failure, might want to ask for key again
+      if (errorMessage.includes("API Key") || errorMessage.includes("403")) {
+         // Optional: logic to show modal again if key is invalid
+      }
     } finally {
       setIsLoading(false);
     }
@@ -60,6 +91,8 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col h-[100dvh] w-full max-w-md mx-auto bg-slate-950 relative shadow-2xl">
       <Header />
+      
+      {showApiKeyModal && <ApiKeyModal onSave={handleSaveApiKey} />}
 
       <main className="flex-1 flex flex-col pt-16 pb-6 overflow-y-auto no-scrollbar">
         {/* Image Display Area */}
@@ -87,9 +120,18 @@ const App: React.FC = () => {
         {/* Controls Area */}
         <div className="px-0 flex flex-col gap-4">
           <div className="px-4">
-            <label className="text-sm text-slate-400 font-medium ml-1 mb-2 block">
-              스타일 선택
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm text-slate-400 font-medium ml-1 block">
+                스타일 선택
+              </label>
+              {/* Reset Key Button (Hidden unless hover/needed usually, but kept visible for beta) */}
+              <button 
+                onClick={() => setShowApiKeyModal(true)}
+                className="text-[10px] text-slate-600 hover:text-slate-400 underline px-2"
+              >
+                API Key 변경
+              </button>
+            </div>
             <StyleSelector 
               selectedStyle={selectedStyle} 
               onSelect={handleStyleSelect}
